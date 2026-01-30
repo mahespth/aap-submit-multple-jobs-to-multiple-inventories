@@ -1,0 +1,97 @@
+---
+
+#
+# This job taskes data and submits templates for those
+# inventories.
+#
+# We do this for instance where we have a large change
+# to services and rather than submit then one my one manually
+# we can use the survey to submit the jobs for us as long
+# as the target jobs do not have their own surveys that
+# we depend on - although you can just pass the correct survey
+# vars using the survey for this.
+# ---------------------------------------------------------
+
+# See: https://docs.ansible.com/ansible/latest/collections/awx/awx/job_launch_module.html
+#      https://github.com/ansible/awx/blob/devel/awx/api/templates/api/job_template_survey_spec.md
+# -------------------------------------------------------
+# Format:
+#   templates:
+#     - "Deploy App"
+#     - "Deploy security updates"
+#   inventories:
+#     - "Location 1"
+#     - "Location 2"
+#   diff_mode:
+#   execution_environment:
+#   extra_vars:
+#   forks:
+#   instance_groups:
+#   interval:
+#   job_slice_count:
+#   job_timeout:
+#   job_type:
+#   labels:
+#   organization:
+#   request_timeout:
+#   scm_branch:
+#   skip_tags:
+#   tags:
+#   timeout:
+#   verbosity:
+#   wait:
+#   limit:
+# -------------------------------------------------------
+
+- name: Submit templates for inventoroes
+  hosts: localhost
+  gather_facts: false
+  vars:
+
+  vars_files:
+    - vars/inventory_access.yml
+
+  pre_tasks:
+
+    # controller_oauthtoken removed due to https://github.com/ansible/awx/pull/15623
+    # stupidly renamed to app_token. Reported 4.6.18 as an issue with redhat.
+    # ---------------------------------------------------------
+    - name: Determine collection version for controller
+      ansible.builtin.set_fact:
+        controller_collection_version: "{{ lookup('community.general.collection_version','ansible.controller') }}" # | replace('\"','') | trim }}"
+
+    - name: Launch each template
+      loop: "{{ templates | product(inventories) | list }}"
+      loop_control:
+        label: "Template={{ item.0 }} Inentory={{ item.1 }}"
+      register: _result
+      ansible.controller.job_launch:
+        controller_host: "{{ aap.controller }}"
+        controller_oauthtoken: "{{ aap.token }}"
+        validate_certs: "{{ aap.validate_certs | default(true) }}"
+        # -------------------------------------------------------
+        name: "{{ item.0 }}"
+        inventory: "{{ item.1 }}"
+        # -------------------------------------------------------
+        organization: "{{ organization | default(omit) }}"
+        credentials: "{{ credentials | default(omit) }}"
+        diff_mode: "{{ diff_mode | default(omit) }}"
+        execution_environment: "{{ execution_environment | default(omit) }}"
+        extra_vars: "{{ extra_vars | default(omit) }}"
+        forks: "{{ forks | default(omit) }}"
+        instance_groups: "{{ instance_groups | default(omit) }}"
+        interval: "{{ interval | default(omit) }}"
+        job_slice_count: "{{ job_slice_count | default(omit) }}"
+        job_timeout: "{{ job_timeout | default(omit) }}"
+        job_type: "{{ job_type | default(omit) }}"
+        labels: "{{ labels | default(omit) }}"
+        request_timeout: "{{ request_timeout | default(omit) }}"
+        scm_branch: "{{ template_scm_branch | default(omit) }}"
+        skip_tags: "{{ timeout | default(omit) }}"
+        tags: "{{ tags | default(omit) }}"
+        timeout: "{{ timeout | default(omit) }}"
+        verbosity: "{{ verbosity | default(omit) }}"
+        wait: "{{ wait | default(omit) }}"
+        limit: "{{ template_limit | default(omit) }}"
+
+...
