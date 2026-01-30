@@ -87,7 +87,7 @@
         labels: "{{ labels | default(omit) }}"
         request_timeout: "{{ request_timeout | default(omit) }}"
         scm_branch: "{{ template_scm_branch | default(omit) }}"
-        skip_tags: "{{ timeout | default(omit) }}"
+        skip_tags: "{{ skip_tags | default(omit) }}"
         tags: "{{ tags | default(omit) }}"
         timeout: "{{ timeout | default(omit) }}"
         verbosity: "{{ verbosity | default(omit) }}"
