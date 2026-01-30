@@ -92,7 +92,7 @@
       register: launch_result
 
       # Optional: don’t hammer Controller too hard
-      throttle: 20
+      throttle: "{{ aap.throttle | default(20) }}"
 
     - name: Show launched job id
       ansible.builtin.debug:
