@@ -1,0 +1,33 @@
+project: "AAP Extras - Template Management"
+
+all_credentials: "{{ credentials + [ win_credentials ] }}"
+
+win_credentials: "Windows Credential"
+
+converged_cred: "Converged Credential"
+
+create_template_retries: 0
+create_timeplate_delay: 30
+
+label_data:
+  - name: DEVOPS
+  - name: ADMIN
+  - name: OPS
+
+  
+template_data:
+
+  - name: "ADMIN - Launch multiple templates for multiple inventories"
+    playbook: collections/playbooks/admin-start-multiple-templates-on-inventories.yml
+    credentials: "{{ converged_cred }}"
+    allow_simultaneous: true
+    ask_inventory_on_launch: false
+    inventory: 
+    labels: 
+      - ADMIN
+      - OPS
+      - DEVOPS
+    survey_spec: "{{ lookup('template', 'templates/aap-submit-multple-jobs-to-multiple-inventories.json.js') }}"
+    survey_enabled: true
+
+...
