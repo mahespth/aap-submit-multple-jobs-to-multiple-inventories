@@ -1,0 +1,99 @@
+---
+
+# A much quicker way to submit the jobs if you have a large
+# environment.
+# -------------------------------------------------------------
+- name: Build ephemeral hosts (one per template+inventory launch)
+  hosts: localhost
+  gather_facts: false
+
+  vars_files:
+    - vars/inventory_access.yml
+
+  tasks:
+    - name: Create per-launch ephemeral hosts
+      ansible.builtin.add_host:
+        name: "launch_{{ (item.0 ~ '|' ~ item.1) | hash('sha1')[:12] }}"
+        groups: aap_launchers
+        ansible_connection: local
+
+        # carry the per-launch data into play 2
+        launch_template_name: "{{ item.0 }}"
+        launch_inventory_name: "{{ item.1 }}"
+
+        # carry global/optional knobs through as hostvars
+        launch_organization: "{{ organization | default(omit) }}"
+        launch_credentials: "{{ credentials | default(omit) }}"
+        launch_diff_mode: "{{ diff_mode | default(omit) }}"
+        launch_execution_environment: "{{ execution_environment | default(omit) }}"
+        launch_extra_vars: "{{ extra_vars | default(omit) }}"
+        launch_forks: "{{ forks | default(omit) }}"
+        launch_instance_groups: "{{ instance_groups | default(omit) }}"
+        launch_interval: "{{ interval | default(omit) }}"
+        launch_job_slice_count: "{{ job_slice_count | default(omit) }}"
+        launch_job_timeout: "{{ job_timeout | default(omit) }}"
+        launch_job_type: "{{ job_type | default(omit) }}"
+        launch_labels: "{{ labels | default(omit) }}"
+        launch_request_timeout: "{{ request_timeout | default(omit) }}"
+        launch_scm_branch: "{{ template_scm_branch | default(omit) }}"
+        launch_skip_tags: "{{ skip_tags | default(omit) }}"
+        launch_tags: "{{ tags | default(omit) }}"
+        launch_timeout: "{{ timeout | default(omit) }}"
+        launch_verbosity: "{{ verbosity | default(omit) }}"
+        launch_wait: "{{ wait | default(omit) }}"
+        launch_limit: "{{ template_limit | default(omit) }}"
+      loop: "{{ templates | product(inventories) | list }}"
+      loop_control:
+        label: "Template={{ item.0 }} Inventory={{ item.1 }}"
+
+- name: Submit templates for inventories (parallel)
+  hosts: aap_launchers
+  gather_facts: false
+  strategy: free
+
+  pre_tasks:
+    - name: Determine collection version for controller
+      ansible.builtin.set_fact:
+        controller_collection_version: "{{ lookup('community.general.collection_version','ansible.controller') }}"
+
+  vars_files:
+    - vars/inventory_access.yml
+
+  tasks:
+    - name: Launch job template for this ephemeral host
+      ansible.controller.job_launch:
+        controller_host: "{{ aap.controller }}"
+        controller_oauthtoken: "{{ aap.token }}"
+        validate_certs: "{{ aap.validate_certs | default(true) }}"
+
+        name: "{{ launch_template_name }}"
+        inventory: "{{ launch_inventory_name }}"
+
+        organization: "{{ launch_organization }}"
+        credentials: "{{ launch_credentials }}"
+        diff_mode: "{{ launch_diff_mode }}"
+        execution_environment: "{{ launch_execution_environment }}"
+        extra_vars: "{{ launch_extra_vars }}"
+        forks: "{{ launch_forks }}"
+        instance_groups: "{{ launch_instance_groups }}"
+        interval: "{{ launch_interval }}"
+        job_slice_count: "{{ launch_job_slice_count }}"
+        job_timeout: "{{ launch_job_timeout }}"
+        job_type: "{{ launch_job_type }}"
+        labels: "{{ launch_labels }}"
+        request_timeout: "{{ launch_request_timeout }}"
+        scm_branch: "{{ launch_scm_branch }}"
+        skip_tags: "{{ launch_skip_tags }}"
+        tags: "{{ launch_tags }}"
+        timeout: "{{ launch_timeout }}"
+        verbosity: "{{ launch_verbosity }}"
+        wait: "{{ launch_wait }}"
+        limit: "{{ launch_limit }}"
+      register: launch_result
+
+      # Optional: don’t hammer Controller too hard
+      throttle: 20
+
+    - name: Show launched job id
+      ansible.builtin.debug:
+        msg: "Launched {{ launch_template_name }} / {{ launch_inventory_name }} -> job={{ launch_result.id | default('unknown') }}"
