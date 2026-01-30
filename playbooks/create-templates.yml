@@ -1,0 +1,216 @@
+---
+
+# Generate the AAP Templates
+# ---------------------------------------------------------
+
+- name: Generate AAP Templates
+  hosts: localhost
+  gather_facts: false
+  vars:
+
+  vars_files:
+    - vars/templates.yml
+
+  pre_tasks:
+
+    # controller_oauthtoken removed due to https://github.com/ansible/awx/pull/15623
+    # stupidly renamed to app_token. Reported 4.6.18 as an issue with redhat.
+    # ---------------------------------------------------------
+    - name: Determine collection version for controller
+      ansible.builtin.set_fact:
+        controller_collection_version: "{{ lookup('community.general.collection_version','ansible.controller') }}" # | replace('\"','') | trim }}"
+
+  tasks:
+    # We get all inventories so that it can be populated in a list for the surveys
+    - name: "Get list of all inventories"
+      vars:
+        controller_host: "{{ aap.controller }}"
+        controller_oauthtoken: "{{ aap.token }}"
+        validate_certs: "{{ aap.validate_certs }}"
+      ansible.builtin.set_fact:
+        inventory_info: >-
+          {{
+            lookup(
+              'ansible.controller.controller_api',
+              'inventories/?page_size=200',
+              host=controller_host,
+              oauth_token=controller_oauthtoken,
+              verify_ssl=validate_certs)
+          }}
+
+    - name: Filter inventories
+      ansible.builtin.set_fact:
+        inventories: >-
+          {{
+            inventory_info
+            | map(attribute='name')
+            | list
+          }}
+
+    # We get all exec environments so that it can be populated in a list for the surveys
+    - name: "Get list of all exection environments"
+      vars:
+        controller_host: "{{ aap.controller }}"
+        controller_oauthtoken: "{{ aap.token }}"
+        validate_certs: "{{ aap.validate_certs }}"
+      ansible.builtin.set_fact:
+        ee_info: >-
+          {{
+            lookup(
+              'ansible.controller.controller_api',
+              'execution_environments/?page_size=200',
+              host=controller_host,
+              oauth_token=controller_oauthtoken,
+              verify_ssl=validate_certs)
+          }}
+
+    - name: Filter execution environments
+      ansible.builtin.set_fact:
+        execution_environments: >-
+          {{
+            ee_info
+            | map(attribute='name')
+            | list
+          }}
+
+
+    # We get all credentials so that it can be populated in a list for the surveys
+    - name: "Get list of all credentials"
+      vars:
+        controller_host: "{{ aap.controller }}"
+        controller_oauthtoken: "{{ aap.token }}"
+        validate_certs: "{{ aap.validate_certs }}"
+      ansible.builtin.set_fact:
+        cred_info: >-
+          {{
+            lookup(
+              'ansible.controller.controller_api',
+              'credentials/?page_size=200&managed=false',
+              host=controller_host,
+              oauth_token=controller_oauthtoken,
+              verify_ssl=validate_certs)
+          }}
+
+    - name: Filter credentials
+      ansible.builtin.set_fact:
+        credentials: >-
+          {{
+            cred_info
+            | map(attribute='name')
+            | list
+          }}
+
+    # We get all exec environments so that it can be populated in a list for the surveys
+    - name: "Get list of all exection environments"
+      vars:
+        controller_host: "{{ aap.controller }}"
+        controller_oauthtoken: "{{ aap.token }}"
+        validate_certs: "{{ aap.validate_certs }}"
+      ansible.builtin.set_fact:
+        template_info: >-
+          {{
+            lookup(
+              'ansible.controller.controller_api',
+              'job_templates/?page_size=200',
+              host=controller_host,
+              oauth_token=controller_oauthtoken,
+              verify_ssl=validate_certs)
+          }}
+
+    - name: Filter execution environments
+      ansible.builtin.set_fact:
+        templates: >-
+          {{
+            template_info
+            | map(attribute='name')
+            | list
+          }}
+
+    - name: "Create JOB templates."
+      #delegate_to: localhost
+      when: controller_collection_version is ansible.builtin.version('4.6.18','<',version_type='strict')
+      ansible.controller.label:
+        controller_host: "{{ item.controller_host | default(aap.controller) }}"
+        controller_oauthtoken: "{{ item.controller_oauthtoken | default(aap.token) }}"
+        validate_certs: "{{ item.validate_certs | default(aap.validate_certs) }}"
+        name: "{{ item.name | default(mandatory) }}"
+        organization: "{{ item.organization | default(aap.organization_name) }}"
+      loop: "{{ label_data }}"
+      retries: "{{ create_template_retries | default(omit) }}"
+      delay: "{{ create_template_delay | default(omit) }}"
+
+    - name: "Create JOB templates."
+      #delegate_to: localhost
+      when: controller_collection_version is ansible.builtin.version('4.6.18','<',version_type='strict')
+      ansible.controller.job_template:
+        controller_host: "{{ item.controller_host | default(aap.controller) }}"
+        controller_oauthtoken: "{{ item.controller_oauthtoken | default(aap.token) }}"
+        validate_certs: "{{ item.validate_certs | default(aap.validate_certs) }}"
+        name: "{{ item.name | default(mandatory) }}"
+        playbook: "{{ item.playbook | default(mandatory) }}"
+        job_type: "{{ item.job_type | default('run') }}"
+        labels: "{{ item.labels | default(['INF','OPS']) }}"
+        ask_limit_on_launch: "{{ item.ask_limit_on_launch | default(false) }}"
+        # We add a stub' inventory so that workflow creation does not fail.
+        inventory: "{{ default_inventory | default('AAP Platform') }}"
+        # ----------------------------------------------------------------
+        organization: "{{ item.organization | default(aap.organization_name) }}"
+        ask_inventory_on_launch: "{{ item.ask_inventory_on_launch | default(true) }}"
+        description: "{{ item.description | default(item.name) }}"
+        extra_vars: "{{ item.extra_vars | default(omit) }}"
+        ask_variables_on_launch: "{{ item.ask_variables_on_launch | default(omit) }}"
+        project: "{{ item.project | default(project) }}"
+        credentials: "{{ item.credentials | default(omit) }}"
+        ask_credential_on_launch: "{{ item.ask_credential_on_launch | default(omit) }}"
+        ask_diff_mode_on_launch: "{{ item.ask_diff_mode_on_launch | default(omit) }}"
+        allow_simultaneous: "{{ item.allow_simultaneous | default(omit) }}"
+        ask_forks_on_launch: "{{ item.ask_forks_on_launch | default(omit) }}"
+        notification_templates_error: "{{ item.notification_templates_error | default(omit) }}"
+        notification_templates_started: "{{ item.notification_templates_started | default(omit) }}"
+        notification_templates_success: "{{ item.notification_templates_success | default(omit) }}"
+        use_fact_cache: "{{ item.use_fact_cache | default(omit) }}"
+        state: "{{ item.state | default('present') }}"
+        survey_enabled: "{{ item.survey_enabled | default(omit) }}"
+        survey_spec: "{{ item.survey_spec | default(omit) }}"
+        execution_environment: "{{ item.execution_environment | default(custom_ee) | default(omit) }}"
+      loop: "{{ template_data }}"
+      retries: "{{ create_template_retries | default(0) }}"
+      delay: "{{ create_template_delay | default(30) }}"
+
+    - name: "Create JOB templates.
+      when: controller_collection_version is ansible.builtin.version('4.6.18','>=',version_type='strict')
+      ansible.controller.job_template:
+        controller_host: "{{ item.controller_host | default(aap.controller) }}"
+        aap_token: "{{ item.controller_oauthtoken | default(aap.token) }}"
+        validate_certs: "{{ item.validate_certs | default(aap.validate_certs) }}"
+        name: "{{ item.name | default(mandatory) }}"
+        playbook: "{{ item.playbook | default(mandatory) }}"
+        job_type: "{{ item.job_type | default('run') }}"
+        ask_limit_on_launch: "{{ item.ask_limit_on_launch | default(false) }}"
+        # We add a stub' inventory so that workflow creation does not fail.
+        inventory: "{{ default_inventory | default('AAP Platform') }}"
+        # ----------------------------------------------------------------
+        organization: "{{ item.organization | default(aap.organization_name) }}"
+        ask_inventory_on_launch: "{{ item.ask_inventory_on_launch | default(true) }}"
+        description: "{{ item.description | default(item.name) }}"
+        extra_vars: "{{ item.extra_vars | default(omit) }}"
+        ask_variables_on_launch: "{{ item.ask_variables_on_launch | default(omit) }}"
+        project: "{{ item.project | default(project) }}"
+        credentials: "{{ item.credentials | default(omit) }}"
+        ask_credential_on_launch: "{{ item.ask_credential_on_launch | default(omit) }}"
+        ask_diff_mode_on_launch: "{{ item.ask_diff_mode_on_launch | default(omit) }}"
+        allow_simultaneous: "{{ item.allow_simultaneous | default(omit) }}"
+        ask_forks_on_launch: "{{ item.ask_forks_on_launch | default(omit) }}"
+        notification_templates_error: "{{ item.notification_templates_error | default(omit) }}"
+        notification_templates_started: "{{ item.notification_templates_started | default(omit) }}"
+        notification_templates_success: "{{ item.notification_templates_success | default(omit) }}"
+        use_fact_cache: "{{ item.use_fact_cache | default(omit) }}"
+        state: "{{ item.state | default('present') }}"
+        survey_enabled: "{{ item.survey_enabled | default(omit) }}"
+        survey_spec: "{{ item.survey_spec | default(omit) }}"
+        execution_environment: "{{ item.execution_environment | default(custom_ee) | default(omit) }}"
+      loop: "{{ template_data }}"
+      retries: "{{ create_template_retries | default(0) }}"
+      delay: "{{ create_template_delay | default(30) }}"
+      
+...
