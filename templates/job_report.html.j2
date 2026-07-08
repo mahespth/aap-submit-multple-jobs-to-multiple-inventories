@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>AAP Job Report</title>
+</head>
+
+<body style="margin:0; padding:0; background-color:#f3f3f3; font-family:Arial, Helvetica, sans-serif; color:#333333;">
+
+{% set failed_jobs = completed_jobs
+  | rejectattr('status', 'equalto', 'successful')
+  | list
+%}
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f3f3f3">
+  <tr>
+    <td align="center" style="padding:20px;">
+
+      <table width="900" border="0" cellspacing="0" cellpadding="0"
+             bgcolor="#ffffff"
+             style="width:900px; border-collapse:collapse; background-color:#ffffff;">
+
+        <tr>
+          <td style="padding:24px;">
+
+            <h2 style="margin:0 0 8px 0; font-size:22px; color:#333333;">
+              Ansible Automation Platform Job Report
+            </h2>
+
+            <p style="margin:0 0 20px 0; font-size:14px; color:#555555;">
+              Launched by:
+              <strong>{{ launched_by_name }}</strong>
+            </p>
+
+            <!-- Summary -->
+            <table width="100%" border="0" cellspacing="0" cellpadding="8"
+                   style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+              <tr>
+                <td width="50%" bgcolor="#e7f3e7"
+                    style="border:1px solid #cccccc; font-size:16px;">
+                  <strong>{{ completed_jobs | length }}</strong>
+                  jobs ran
+                </td>
+
+                <td width="50%"
+                    bgcolor="{% if failed_jobs | length > 0 %}#f8d7da{% else %}#e7f3e7{% endif %}"
+                    style="border:1px solid #cccccc; font-size:16px;">
+                  <strong>{{ failed_jobs | length }}</strong>
+                  failed
+                </td>
+              </tr>
+            </table>
+
+            <h3 style="margin:0 0 10px 0; font-size:18px; color:#333333;">
+              Job Results
+            </h3>
+
+            <!-- Job summary table -->
+            <table width="100%" border="0" cellspacing="0" cellpadding="7"
+                   style="width:100%; border-collapse:collapse; font-size:13px;">
+
+              <tr bgcolor="#333333">
+                <th align="left"
+                    style="border:1px solid #cccccc; color:#ffffff;">
+                  Status
+                </th>
+
+                <th align="left"
+                    style="border:1px solid #cccccc; color:#ffffff;">
+                  Inventory
+                </th>
+
+                <th align="left"
+                    style="border:1px solid #cccccc; color:#ffffff;">
+                  Job Template
+                </th>
+
+                <th align="left"
+                    style="border:1px solid #cccccc; color:#ffffff;">
+                  Job ID
+                </th>
+
+                <th align="right"
+                    style="border:1px solid #cccccc; color:#ffffff;">
+                  Elapsed
+                </th>
+
+                <th align="left"
+                    style="border:1px solid #cccccc; color:#ffffff;">
+                  Job
+                </th>
+              </tr>
+
+              {% for job in completed_jobs %}
+              {% set job_failed = job.status != 'successful' %}
+
+              <tr bgcolor="{% if job_failed %}#fce8e8{% elif loop.index is even %}#f7f7f7{% else %}#ffffff{% endif %}">
+
+                <td style="border:1px solid #cccccc;">
+                  {% if job.status == 'successful' %}
+                    <strong style="color:#217346;">
+                      SUCCESSFUL
+                    </strong>
+                  {% else %}
+                    <a href="#job-{{ job.id }}"
+                       style="color:#c00000; font-weight:bold; text-decoration:underline;">
+                      {{ job.status | upper }}
+                    </a>
+                  {% endif %}
+                </td>
+
+                <td style="border:1px solid #cccccc;">
+                  {{ job.inventory.name | default('N/A', true) }}
+                </td>
+
+                <td style="border:1px solid #cccccc;">
+                  {{ job.unified_job_template.name | default('N/A', true) }}
+                </td>
+
+                <td style="border:1px solid #cccccc;">
+                  {{ job.id }}
+                </td>
+
+                <td align="right"
+                    style="border:1px solid #cccccc; white-space:nowrap;">
+                  {{ '%.1f' | format(job.elapsed | default(0) | float) }} sec
+                </td>
+
+                <td style="border:1px solid #cccccc;">
+                  <a href="{{ aap_url }}{{ job.url }}"
+                     style="color:#0563c1; text-decoration:underline;">
+                    View job {{ job.id }}
+                  </a>
+                </td>
+
+              </tr>
+              {% endfor %}
+
+            </table>
+
+
+            {% if failed_jobs | length > 0 %}
+
+            <h3 style="margin:30px 0 10px 0; font-size:18px; color:#c00000;">
+              Failure Details
+            </h3>
+
+            {% for job in failed_jobs %}
+
+            <a name="job-{{ job.id }}" id="job-{{ job.id }}"></a>
+
+            <table width="100%" border="0" cellspacing="0" cellpadding="7"
+                   style="width:100%; border-collapse:collapse; margin-bottom:25px; font-size:13px;">
+
+              <tr bgcolor="#c00000">
+                <th colspan="2"
+                    align="left"
+                    style="border:1px solid #999999; color:#ffffff; font-size:15px;">
+                  Job {{ job.id }} - {{ job.status | upper }}
+                </th>
+              </tr>
+
+              <tr>
+                <td width="160"
+                    bgcolor="#eeeeee"
+                    style="border:1px solid #cccccc;">
+                  <strong>Job ID</strong>
+                </td>
+
+                <td style="border:1px solid #cccccc;">
+                  <a href="{{ aap_url }}{{ job.url }}"
+                     style="color:#0563c1; text-decoration:underline;">
+                    {{ job.id }}
+                  </a>
+                </td>
+              </tr>
+
+              <tr>
+                <td bgcolor="#eeeeee"
+                    style="border:1px solid #cccccc;">
+                  <strong>Inventory</strong>
+                </td>
+
+                <td style="border:1px solid #cccccc;">
+                  {{ job.inventory.name | default('N/A', true) }}
+                </td>
+              </tr>
+
+              <tr>
+                <td bgcolor="#eeeeee"
+                    style="border:1px solid #cccccc;">
+                  <strong>Job Template</strong>
+                </td>
+
+                <td style="border:1px solid #cccccc;">
+                  {{ job.unified_job_template.name | default('N/A', true) }}
+                </td>
+              </tr>
+
+              <tr>
+                <td bgcolor="#eeeeee"
+                    style="border:1px solid #cccccc;">
+                  <strong>Failure Details</strong>
+                </td>
+
+                <td style="border:1px solid #cccccc; padding:10px;">
+
+                  {% set events = job_events[job.id] | default([]) %}
+                  {% set failure = namespace(found=false) %}
+
+                  {% for event in events %}
+
+                    {% if event.event in [
+                      'runner_on_failed',
+                      'runner_on_unreachable',
+                      'runner_on_async_failed'
+                    ] %}
+
+                      {% set failure.found = true %}
+
+                      <table width="100%" border="0" cellspacing="0" cellpadding="5"
+                             style="width:100%; border-collapse:collapse; margin-bottom:12px;">
+
+                        {% if event.event_data.host is defined %}
+                        <tr>
+                          <td width="100"
+                              bgcolor="#f3f3f3"
+                              style="border:1px solid #dddddd;">
+                            <strong>Host</strong>
+                          </td>
+
+                          <td style="border:1px solid #dddddd;">
+                            {{ event.event_data.host }}
+                          </td>
+                        </tr>
+                        {% endif %}
+
+                        {% if event.event_data.task is defined %}
+                        <tr>
+                          <td bgcolor="#f3f3f3"
+                              style="border:1px solid #dddddd;">
+                            <strong>Task</strong>
+                          </td>
+
+                          <td style="border:1px solid #dddddd;">
+                            {{ event.event_data.task }}
+                          </td>
+                        </tr>
+                        {% endif %}
+
+                        <tr>
+                          <td bgcolor="#f3f3f3"
+                              style="border:1px solid #dddddd;">
+                            <strong>Error</strong>
+                          </td>
+
+                          <td style="border:1px solid #dddddd;
+                                     font-family:Consolas, 'Courier New', monospace;
+                                     font-size:12px;">
+
+                            {% if event.event_data.res is defined %}
+
+                              {% if event.event_data.res.msg is defined %}
+                                {{ event.event_data.res.msg }}
+                              {% elif event.event_data.res.stderr is defined %}
+                                {{ event.event_data.res.stderr }}
+                              {% elif event.event_data.res.exception is defined %}
+                                {{ event.event_data.res.exception }}
+                              {% else %}
+                                {{ event.event_data.res | to_nice_json }}
+                              {% endif %}
+
+                            {% elif event.stdout is defined %}
+
+                              {{ event.stdout }}
+
+                            {% else %}
+
+                              No failure details were returned by the job event.
+
+                            {% endif %}
+
+                          </td>
+                        </tr>
+
+                      </table>
+
+                    {% endif %}
+
+                  {% endfor %}
+
+                  {% if not failure.found %}
+                    <p style="margin:0; color:#c00000;">
+                      No runner failure event was found.
+                      Review the AAP job output for further details.
+                    </p>
+                  {% endif %}
+
+                </td>
+              </tr>
+
+            </table>
+
+            {% endfor %}
+
+            {% endif %}
+
+          </td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
